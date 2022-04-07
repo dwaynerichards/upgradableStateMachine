@@ -178,18 +178,20 @@ contract PetroStake is OwnableUpgradeable, ERC721Upgradeable {
     }
 
     /**
-     * @dev you will from 1- nftid's max number to dispatch payemntto each owner
+     * @dev you will from 1- nftid's max number to dispatch payments to each owner
      */
     function dispatchPayments(uint256 contractId) public payable owner contractNotAvail(contractId) contractFunded(contractId) {
         PaymentId paymentId = _getPaymentId(); //function increments paymentIDs
         _dispatchPayments(contractId, paymentId);
     }
 
+    /**@dev consider adding a event for payment dispatched */
     function _getPaymentId(uint256 contractId) internal returns (PaymentId paymentId) {
         OilContract storage oilContract = oilContracts[contractId];
         paymentId = oilContract.paymentID++;
     }
 
+    /**@dev consider putting in reentrancy guard as contract will continue to execute as itteration continues through array */
     function _dispatchPayments(uint256 contractId, PaymentId paymentId) internal {
         OilContract storage oilContract = oilContracts[contractId];
         for (uint256 nftId = 1; i < oilContract.nftIds; i++) {
