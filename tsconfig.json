@@ -4,9 +4,10 @@
     "module": "commonjs",
     "strict": true,
     "esModuleInterop": true,
+    "moduleResolution": "node",
     "outDir": "dist",
+    "forceConsistentCasingInFileNames": true,
     "declaration": true
   },
-  "include": ["./scripts", "./test", "./typechain"],
-  "files": ["./hardhat.config.ts"]
+  "include": ["./scripts", "./test", "./typechain", "./hardhat.config.ts", "./deploy"]
 }
