@@ -6,7 +6,6 @@ import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
-import "@openzeppelin/hardhat-upgrades";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-deploy";
 import "@openzeppelin/hardhat-upgrades";
@@ -24,6 +23,7 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
+const defaultNetwork = "hardhat";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -35,10 +35,17 @@ const config: HardhatUserConfig = {
       },
     },
   },
+  defaultNetwork,
   namedAccounts: {
-    deployer: 0,
+    deployer: 0, //default index of deployer
   },
   networks: {
+    hardhat: {
+      chainId: 31337,
+    },
+    localhost: {
+      chainId: 31337,
+    },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],

@@ -48,21 +48,34 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 	/**
 	 * @dev function will create Oil contract
 	 */
-	event OilContractDeedPurchased(uint256 contractId, uint256 nftId, uint256 deedAmount);
-	event OilContractCreated(uint256 contractId, uint256 contractValue);
-	event OilContractAvail(uint256 contractId, bytes32 contractName, uint256 contractValue, bool available);
-	event OilContractUnAvail(uint256 contractId, bytes32 contractName, uint256 contractValue, bool available);
-	event ContractFunded(uint256 contractId, bytes32 contractName, uint256 totalValueLocked, bool isFunded);
-	//@dev place indexing on payment dispatch event
-	//payment dispatching should be indexedrather than saved onchain
-	event PaymentDispatched(uint256 nftId, uint256 paymentId, uint256 paymentAmount, address owner);
+	event OilContractDeedPurchased(uint256 indexed contractId, uint256 indexed nftId, uint256 indexed deedAmount);
+	event OilContractCreated(uint256 indexed contractId, uint256 indexed contractValue);
+	event OilContractAvail(
+		uint256 indexed contractId,
+		bytes32 indexed contractName,
+		uint256 indexed contractValue,
+		bool available
+	);
+	event OilContractUnAvail(
+		uint256 indexed contractId,
+		bytes32 indexed contractName,
+		uint256 indexed contractValue,
+		bool available
+	);
+	event ContractFunded(
+		uint256 indexed contractId,
+		bytes32 indexed contractName,
+		uint256 indexed totalValueLocked,
+		bool isFunded
+	);
+	event PaymentDispatched(uint256 indexed nftId, uint256 indexed paymentId, uint256 indexed paymentAmount, address owner);
 
 	function _createName(string calldata _name, uint256 _id) internal view returns (bytes32) {
 		return keccak256(abi.encodePacked(_name, _id, address(this)));
 	}
 
 	/**
-	 * @dev function will creat oil contract
+	 * @dev function will create oil contract
 	 * @param contractName: the name of contract
 	 * @param contractValue: the total value of contract
 	 **/

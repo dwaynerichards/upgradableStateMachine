@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
+import "hardhat/console.sol";
 import "@openzeppelin/contracts-upgradeable/governance/TimelockControllerUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -56,6 +57,7 @@ sets deployer and address(this) as timeLockAdmin, which has admin over propers a
 		//passing variables to init is the same as passing to the parent contract's constructor
 		__UUPSUpgradeable_init();
 		__TimelockController_init(minDelay, proposers, executors);
+		console.log("TimeLock contract deployed by msgSender(): %s:", msg.sender);
 	}
 
 	function _authorizeUpgrade(address newImplementation) internal override onlyRole(TIMELOCK_ADMIN_ROLE) {}
