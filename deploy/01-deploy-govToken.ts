@@ -1,21 +1,30 @@
-import { DeployFunction } from "hardhat-deploy/dist/types";
+import { DeployFunction, ExtendedArtifact } from "hardhat-deploy/dist/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { upgrades, ethers } from "hardhat";
+import { upgrades } from "hardhat";
 import { log } from "console";
-import { DEPLOYMENTS } from "../hardhat-helper-config";
+import { getArtifactAndFactory } from "../hardhat-helper-config";
+import { ContractFactory } from "ethers";
 
 const deployGovToken: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
-  const { getNamedAccounts } = hre;
+  const { getNamedAccounts, deployments } = hre;
   const { deployer } = await getNamedAccounts();
+  const { save } = deployments;
   /***
    * You can use this plugin in a Hardhat script to deploy an upgradeable
    * instance of one of your contracts via the "deployProxy" function: */
   log("deployer address :", deployer);
   log("Deploying GovToken Proxy and implementation contract...");
-  const GovToken = await ethers.getContractFactory("GovToken");
-  const govToken = await upgrades.deployProxy(GovToken, { kind: "uups" });
-  
-  DEPLOYMENTS.govToken = await govToken.deployed();
+  const { GovToken, artifact } = await getArtifactAndFactory(hre, "GovToken");
+  const govToken = await upgrades.deployProxy(GovToken as ContractFactory, { kind: "uups" });
+  await govToken.deployed();
+  /****
+   * save(name: string, deployment: DeploymentSubmission): Promise<void>; // low level save of deployment
+  get(name: string): Promise<Deployment>; // fetch a deployment by name, throw if not existingsave(name: string, deployment: DeploymentSubmission): Promise<void>; // low level save of deployment
+   */
+  await save("GovToken", {
+    address: govToken.address,
+    ...(artifact as ExtendedArtifact),
+  });
   log("01- GovToken deployed to:", govToken.address);
 
   const delegateTx = await govToken.delegate(deployer);

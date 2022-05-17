@@ -1,5 +1,3 @@
-import * as dotenv from "dotenv";
-
 import { HardhatUserConfig, task } from "hardhat/config";
 import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-waffle";
@@ -9,6 +7,7 @@ import "solidity-coverage";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-deploy";
 import "@openzeppelin/hardhat-upgrades";
+import * as dotenv from "dotenv";
 dotenv.config();
 
 // This is a sample Hardhat task. To learn how to create your own go to

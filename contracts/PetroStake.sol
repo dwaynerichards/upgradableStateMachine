@@ -10,8 +10,6 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 	uint256 public contractIds;
 	mapping(uint256 => OilContract) public oilContracts;
 	mapping(bytes32 => mapping(uint256 => uint256)) public contractIdToNftAmount;
-
-	//	mapping(NFT_ID => mapping(uint256 => Payment)) payments;
 	/**
     * @dev contracts which have been extended must have thir intializer/constructor invoked
     __{contractName}_init acts as a constructor
@@ -133,16 +131,17 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 	function purchaseContractStake(uint256 contractId) external payable {
 		OilContract memory oilContract = oilContracts[contractId];
 		uint256 availPurchaseAmount = oilContract.totalValue - oilContract.totalValueLocked;
-		require(msg.value <= availPurchaseAmount, "Too much ether sent");
+		uint256 usdcEthQuote = _getQuoterVal(msg.value);
+		require(usdcEthQuote > availPurchaseAmount, "Too much ether sent");
 		require(!oilContract.funded, "Contract fully funded");
 		require(oilContract.available, "Contract not available");
-		
-		uint usdcAmount = _swapEthForStable();
+
+		uint256 usdcAmount = _swapEthToStable();
 
 		contractIdToNftAmount[oilContract.name][oilContract.nftIds++] = usdcAmount;
 
-		oilContract.totalValueLocked += usdAmount;
-		emit OilContractDeedPurchased(oilContract.id, oilContract.nftIds, usdAmount);
+		oilContract.totalValueLocked += usdcAmount;
+		emit OilContractDeedPurchased(oilContract.id, oilContract.nftIds, usdcAmount);
 		if (oilContract.totalValueLocked >= oilContract.totalValue) {
 			oilContract.funded = true;
 			oilContract.available = false;
@@ -151,10 +150,15 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 		_dispatchNFT(msg.sender, oilContract.nftIds);
 		oilContracts[contractId] = oilContract;
 	}
-   /// @notice swapEthRoStable swaps a fixed amount of WETH (amountIn) for a maximum possible amount of USDC
-    /// @return amountOut The amount of USDC received.
-	function _swapEthToStable() internal view returns (uint256 usdAmount) {
-		uint minUSDC = _getAmountOutMin()
+
+	/***
+    @notice swapEthRoStable swaps a fixed amount of WETH (amountIn) for a maximum possible amount 
+	of USDC using uniswap router
+   @return amountOut The amount of USDC received.
+	
+	 */
+	function _swapEthToStable() internal returns (uint256 usdcAmount) {
+		uint256 minUSDC = _getAmountOutMin();
 		ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
 			tokenIn: WETH,
 			tokenOut: USDC,
@@ -166,7 +170,11 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 			sqrtPriceLimitX96: 0
 		});
 
-		usdcAmount = swapRouter.exactInput(params);
+		usdcAmount = swapRouter.exactInputSingle(params);
+	}
+
+	function _getQuoterVal(uint256 _eth) internal view returns (uint256 usdsQuote) {
+		//must fill function with uniswap quoter
 	}
 
 	function _getAmountOutMin() internal view returns (uint256) {
@@ -177,96 +185,101 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 		return usdcAmount;
 	}
 
-	function _getOracleRate(
-		address USDS,
-		address WETH,
-		uint256 amount
-	) internal pure returns (uint256) {}
-}
+	function _getOracleRate(address USDS, address _WETH) internal pure returns (uint256) {}
 
-/**
- * @dev _updateContract increment contractNFTID, updates TVL, and adds newTokenId to mapping
- * @return newTokenId : the token ID to be passed into dispatchNFT internal function
- */
+	/**
+	 * @dev _updateContract increment contractNFTID, updates TVL, and adds newTokenId to mapping
+	 * @return newTokenId : the token ID to be passed into dispatchNFT internal function
+	 */
 
-/** @dev function dispatches token using _safeMint, an internal function extended from 721Upgradeable */
-function _dispatchNFT(address to, uint256 nftId) internal {
-	//safeMint emits transfer event
-	_safeMint(to, nftId); //NEED META DATA
-	//tokenURI requirment will involve erc721uristorage rather than regular erc721
-	//_setTokenUri(nftId, tokenURI)
-}
+	/** @dev function dispatches token using _safeMint, an internal function extended from 721Upgradeable */
+	function _dispatchNFT(address to, uint256 nftId) internal {
+		//safeMint emits transfer event
+		_safeMint(to, nftId); //NEED META DATA
+		//tokenURI requirment will involve erc721uristorage rather than regular erc721
+		//_setTokenUri(nftId, tokenURI)
+	}
 
-/**
- * @dev functions dispatches and records payments to each ownerOf NFT associated with contract
- */
-function dispatchPayments(uint256 contractId) external payable onlyOwner {
-	OilContract memory oilContract = oilContracts[contractId];
-	require(oilContract.funded, "contract must me funded");
-	oilContracts[contractId] = _dispatchPayments(oilContract);
-}
+	/**
+	 * @dev functions dispatches and records payments to each ownerOf NFT associated with contract
+	 */
+	function dispatchPayments(uint256 contractId) external payable onlyOwner {
+		OilContract memory oilContract = oilContracts[contractId];
+		require(oilContract.funded, "contract must me funded");
+		oilContracts[contractId] = _dispatchPayments(oilContract);
+	}
 
-/**
+	/**
 	* @dev function iterates through nftId's, dispatches payment to ownerOf nft, records Payment receipt
     consider putting in reentrancy guard as contract will continue to execute as itteration continues through nftId's
     * @param oilContract: oilContract with which to dispatch payments
      */
-//instead of dispatching payment to wallet
-//pay into oilContract
-//let owner of nft pull payments from contract
-//or instantiate new literal contract/ with address for each oil contract
-//dispatch payents to each oil contract
-//let nft owners pull payment from each oil contract address
-function _dispatchPayments(OilContract memory oilContract) internal returns (OilContract memory) {
-	for (uint256 nftId = 1; nftId <= oilContract.nftIds; nftId++) {
-		uint256 paymentId = oilContract.paymentId++; //function increments paymentIDs
-		address nftOwner = ownerOf(nftId);
-		uint256 paymentDue = _calculatePayment(nftId, oilContract.name, oilContract.totalValue);
-		(bool success, ) = payable(nftOwner).call{ value: paymentDue }("");
-		require(success, "PaymentError");
-		emit PaymentDispatched(nftId, paymentId, paymentDue, nftOwner);
+	//instead of dispatching payment to wallet
+	//pay into oilContract
+	//let owner of nft pull payments from contract
+	//or instantiate new literal contract/ with address for each oil contract
+	//dispatch payents to each oil contract
+	//let nft owners pull payment from each oil contract address
+	function _dispatchPayments(OilContract memory oilContract) internal returns (OilContract memory) {
+		for (uint256 nftId = 1; nftId <= oilContract.nftIds; nftId++) {
+			uint256 paymentId = oilContract.paymentId++; //function increments paymentIDs
+			address nftOwner = ownerOf(nftId);
+			uint256 paymentDue = _calculatePayment(nftId, oilContract.name, oilContract.totalValue);
+			(bool success, ) = payable(nftOwner).call{ value: paymentDue }("");
+			require(success, "PaymentError");
+			emit PaymentDispatched(nftId, paymentId, paymentDue, nftOwner);
+		}
+		return oilContract;
 	}
-	return oilContract;
+
+	/**
+	 * @dev function calculates payment die to an ownerOf nft associated with contract
+	 * @param nftId: uint identifier associated with nft
+	 * @param contractName: encoded name of contract
+	 * @param contractVal: total value of contract
+	 */
+	function _calculatePayment(
+		uint256 nftId,
+		bytes32 contractName,
+		uint256 contractVal
+	) internal view returns (uint256 amountDue) {
+		//access nft  access deed, caliculate percentage of totalContractValue
+		//mapping(bytes32 => mapping(uint256 => uint256)) contractIdToNFT_Amount;
+		uint256 ownerStake = contractIdToNftAmount[contractName][nftId];
+		amountDue = _getAmountDue(ownerStake, contractVal);
+		return amountDue;
+	}
+
+	/**
+	 * @dev function calculates percentage of contract owned by ownerOf NFT, and determines amount due to ownerOf NFT
+	 * @param ownerStake: theamount of value the owner has in he oil contract
+	 * @param contractValue: the total value of the oil contract
+	 */
+	function _getAmountDue(uint256 ownerStake, uint256 contractValue) private pure returns (uint256 amountDue) {
+		uint256 percentageOwed = _getBasis(ownerStake, contractValue);
+		amountDue = (percentageOwed * contractValue) / 10000;
+	}
+
+	function _getBasis(uint256 _numerator, uint256 denominator) private pure returns (uint256 _basis) {
+		// caution, check safe-to-multiply here
+		uint256 numerator = _numerator * 10000;
+		// with rounding of last digit
+		_basis = numerator / denominator;
+		// 101 numeratr,450 denominator, 3 percision : will equal 224, i.e. 22.4%.
+		return _basis;
+	}
+
+	function getOilContract(uint256 _contractId) public view returns (OilContract memory _oilContract) {
+		_oilContract = _getOilContract(_contractId);
+	}
+
+	function _getOilContract(uint256 _contractId) internal view returns (OilContract storage oilContract) {
+		oilContract = oilContracts[_contractId];
+	}
+
+	function getContractIds() external view returns (uint256) {
+		return contractIds;
+	}
+
+	function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }
-
-/**
- * @dev function calculates payment die to an ownerOf nft associated with contract
- * @param nftId: uint identifier associated with nft
- * @param contractName: encoded name of contract
- * @param contractVal: total value of contract
- */
-function _calculatePayment(
-	uint256 nftId,
-	bytes32 contractName,
-	uint256 contractVal
-) internal view returns (uint256 amountDue) {
-	//access nft  access deed, caliculate percentage of totalContractValue
-	//mapping(bytes32 => mapping(uint256 => uint256)) contractIdToNFT_Amount;
-	uint256 ownerStake = contractIdToNftAmount[contractName][nftId];
-	amountDue = _getAmountDue(ownerStake, contractVal);
-	return amountDue;
-}
-
-/**
- * @dev function calculates percentage of contract owned by ownerOf NFT, and determines amount due to ownerOf NFT
- * @param ownerStake: theamount of value the owner has in he oil contract
- * @param contractValue: the total value of the oil contract
- */
-function _getAmountDue(uint256 ownerStake, uint256 contractValue) private pure returns (uint256 amountDue) {
-	uint256 percentageOwed = _getBasis(ownerStake, contractValue);
-	amountDue = (percentageOwed * contractValue) / 10000;
-}
-
-function _getBasis(uint256 _numerator, uint256 denominator) private pure returns (uint256 _basis) {
-	// caution, check safe-to-multiply here
-	uint256 numerator = _numerator * 10000;
-	// with rounding of last digit
-	_basis = numerator / denominator;
-	// 101 numeratr,450 denominator, 3 percision : will equal 224, i.e. 22.4%.
-	return _basis;
-}
-
-function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
-
-}
-

@@ -13,12 +13,12 @@
     },
     {
       "address": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
-      "txHash": "0x83a7befc755d7a9f1a382e8cc26ac68806f1264e96ef963c2c3e331656203dc5",
+      "txHash": "0x09f00da3807a966d0499c7810604d8469a997c4bd59b3efac7aec56a2184f6be",
       "kind": "uups"
     },
     {
       "address": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-      "txHash": "0x50d5d369300ee87c8e22b35b96417f6c1262c4493ae5b36ab8c3c3ad387f8806",
+      "txHash": "0x529e5fbca249805833309c01c95aa7cbea0650ce61095f73d8fc47a8e02b98c2",
       "kind": "uups"
     }
   ],
@@ -849,9 +849,9 @@
         }
       }
     },
-    "dc9ca15ff8a9c99e721fd9ad8717980fb4e450011749150281b04c05841be359": {
+    "cfc067065d47f7da06f0bab7c2108c01d8548d64aa7e61ff1563912d26c1b5af": {
       "address": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
-      "txHash": "0x7a39dd46cdd8b6d8945866e1f903ade8c27b5fc07e325250977e5a428e6b4ebb",
+      "txHash": "0x3aec8ec52ca77379b55e73507354d705ad99d5e61e65df80ffb398aa1a02cded",
       "layout": {
         "storage": [
           {
@@ -986,7 +986,7 @@
             "label": "oilContracts",
             "offset": 0,
             "slot": "302",
-            "type": "t_mapping(t_uint256,t_struct(OilContract)9013_storage)",
+            "type": "t_mapping(t_uint256,t_struct(OilContract)9138_storage)",
             "contract": "PetroStake",
             "src": "contracts/PetroStake.sol:11"
           },
@@ -997,6 +997,30 @@
             "type": "t_mapping(t_bytes32,t_mapping(t_uint256,t_uint256))",
             "contract": "PetroStake",
             "src": "contracts/PetroStake.sol:12"
+          },
+          {
+            "label": "swapRouter",
+            "offset": 0,
+            "slot": "304",
+            "type": "t_contract(ISwapRouter)8948",
+            "contract": "PetroStake",
+            "src": "contracts/PetroStake.sol:18"
+          },
+          {
+            "label": "USDC",
+            "offset": 0,
+            "slot": "305",
+            "type": "t_address",
+            "contract": "PetroStake",
+            "src": "contracts/PetroStake.sol:19"
+          },
+          {
+            "label": "WETH",
+            "offset": 0,
+            "slot": "306",
+            "type": "t_address",
+            "contract": "PetroStake",
+            "src": "contracts/PetroStake.sol:20"
           }
         ],
         "types": {
@@ -1024,6 +1048,10 @@
             "label": "bytes32",
             "numberOfBytes": "32"
           },
+          "t_contract(ISwapRouter)8948": {
+            "label": "contract ISwapRouter",
+            "numberOfBytes": "20"
+          },
           "t_mapping(t_address,t_bool)": {
             "label": "mapping(address => bool)",
             "numberOfBytes": "32"
@@ -1044,7 +1072,7 @@
             "label": "mapping(uint256 => address)",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_uint256,t_struct(OilContract)9013_storage)": {
+          "t_mapping(t_uint256,t_struct(OilContract)9138_storage)": {
             "label": "mapping(uint256 => struct PetroStake.OilContract)",
             "numberOfBytes": "32"
           },
@@ -1056,7 +1084,7 @@
             "label": "string",
             "numberOfBytes": "32"
           },
-          "t_struct(OilContract)9013_storage": {
+          "t_struct(OilContract)9138_storage": {
             "label": "struct PetroStake.OilContract",
             "members": [
               {
