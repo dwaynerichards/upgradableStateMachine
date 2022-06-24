@@ -9,5 +9,12 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": true
   },
-  "include": ["./scripts", "./test", "./typechain", "./hardhat.config.ts", "./deploy"]
+  "include": [
+    "./scripts",
+    "./test",
+    "./typechain",
+    "./hardhat.config.ts",
+    "./deploy",
+    "test/.test.ts"
+  ]
 }

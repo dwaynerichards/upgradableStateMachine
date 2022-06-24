@@ -7,11 +7,11 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract GovToken is Initializable, ERC20VotesUpgradeable, UUPSUpgradeable, OwnableUpgradeable {
-	uint256 public constant S_MAX_SUPPLY = 1000000 * (10**18);
+	uint256 public S_MAX_SUPPLY;
 
 	/**
-	 * @dev Implementation of the ERC20 Permit extension allowing approvals to be made via signatures, as defined in
-	 * https://eips.ethereum.org/EIPS/eip-2612[EIP-2612].
+	 * @dev Implementation of the ERC20 Permit extension allowing approvals to be made via signatures, 
+	 as defined in https://eips.ethereum.org/EIPS/eip-2612[EIP-2612].
 	 *
 	 * Adds the {permit} method, which can be used to change an account's ERC20 allowance (see {IERC20-allowance}) by
 	 * presenting a message signed by the account. By not relying on `{IERC20-approve}`, the token holder account doesn't
@@ -25,7 +25,8 @@ contract GovToken is Initializable, ERC20VotesUpgradeable, UUPSUpgradeable, Owna
 	/// @custom:oz-upgrades-unsafe-allow constructor
 	constructor() initializer {}
 
-	function initialize() public initializer {
+	function initialize(uint256 _S_MAX_SUPPLY) public initializer {
+		S_MAX_SUPPLY = _S_MAX_SUPPLY;
 		__ERC20_init("PetroStakeDoa", "PTSD");
 		__ERC20Permit_init("PetroStakeDoa");
 		__UUPSUpgradeable_init();

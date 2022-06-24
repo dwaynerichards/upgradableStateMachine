@@ -5,18 +5,16 @@ import {
   MIN_DELAY,
   PROPOSERS,
   EXECUTIONERS,
-  DEPLOYMENTS,
   getArtifactAndFactory,
 } from "../hardhat-helper-config";
 import { DeployFunction, ExtendedArtifact } from "hardhat-deploy/dist/types";
-import { DeploymentSubmission } from "hardhat-deploy/dist/types";
 import { ContractFactory } from "ethers";
 
 /***
  * proposers are those that can proposed a governance
+ * executers are array of addresses that can execute a successful proposal
  * only governor contract to be proposer, anyone can be executer
  *
- * executers are array of addresses that can execute a successful proposal
  * min delay is peroid of time after a vote has passed,
  * but before execution
  */

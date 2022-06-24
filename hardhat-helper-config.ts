@@ -14,7 +14,6 @@ export const VOTING_DELAY = 1;
 export const VOTING_PERIOD = 66;
 export const QUORUM_PERCENTAGE = 4;
 
-export const DEPLOYMENTS: deployment = {};
 export const ADDRESS_ZERO = "0x0000000000000000000000000000000000000000";
 export const PROPOSAL_FILE = "proposals.json";
 
@@ -46,21 +45,16 @@ export const getArtifactAndFactory = async (hre: HardhatRuntimeEnvironment, cont
   const { deployments } = hre;
   const { getExtendedArtifact } = deployments;
   const { getContractFactory } = ethers;
-  const contractObj: deployment = {};
-  contractObj[contractName] = await getContractFactory(contractName);
-  contractObj.artifact = await getExtendedArtifact(contractName);
-  return contractObj;
+  const artifact = await getExtendedArtifact(contractName);
+  return {
+    artifact,
+    [contractName]: (await getContractFactory(contractName)) as ContractFactory,
+  };
   /***
    * {
    * constractName: Contract
    * ...artifact
    * }
-   *
-   * const
    */
 };
-
 export const devChains = ["hardhat", "localhost"];
-interface deployment {
-  [k: string]: ExtendedArtifact | ContractFactory;
-}

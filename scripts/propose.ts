@@ -17,6 +17,7 @@ export default (async (
   // ecodedFunctionData takes a string of the function name and an array of the arguments
   const encodedFunctionCall = PetroStake.interface.encodeFunctionData(functionToCall, args);
 
+  //get contractAt returns a contract connected to the first signer returned from "getSigners()"
   const tx = await Governor.propose([PetroStake.address], value, [encodedFunctionCall], proposalDesc);
   const txReceipt = await tx.wait(1);
 

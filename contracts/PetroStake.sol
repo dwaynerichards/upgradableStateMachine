@@ -5,51 +5,62 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC721Upgradeable {
 	uint256 public contractIds;
+	uint24 public poolFee;
+
+	ISwapRouter public swapRouter;
+	address public USDC;
+	address public WETH;
+
 	mapping(uint256 => OilContract) public oilContracts;
 	mapping(bytes32 => mapping(uint256 => uint256)) public contractIdToNftAmount;
+	mapping(uint256 => mapping(address => uint256)) escrowPayments;
+	struct OilContract {
+		uint256 id;
+		uint256 totalValue;
+		uint256 totalValueLocked;
+		uint256 nftIds;
+		uint256 paymentId;
+		bytes32 name;
+		bool available;
+		bool funded;
+		//payment dispatching should be indexedrather than saved onchain
+	}
+
+	/***
+uint256 is 32 bytes
+uint128 is 16 bytes
+uint64 is 8 bytes
+address (and address payable) is 20 bytes
+bool is 1 byte
+string is usually one byte per character
+	 */
+
 	/**
     * @dev contracts which have been extended must have thir intializer/constructor invoked
     __{contractName}_init acts as a constructor
     * @ param newOwner multsig wallet should be initialized as newOwner
      */
-	ISwapRouter public swapRouter;
-	address public USDC;
-	address public WETH;
-	// For this example, we will set the pool fee to 0.3%.
-	uint24 public constant poolFee = 3000;
-	struct OilContract {
-		uint256 id;
-		uint256 totalValue;
-		bytes32 name;
-		bool available;
-		uint256 totalValueLocked;
-		bool funded;
-		uint256 nftIds;
-		uint256 paymentId;
-		//payment dispatching should be indexedrather than saved onchain
-	}
-
 	function initialize(
 		address newOwner,
-		address _stableCoin,
+		address _USDC,
 		address _WETH,
-		ISwapRouter _swapRouter
+		ISwapRouter _swapRouter,
+		uint24 _poolFee
 	) public initializer {
 		__UUPSUpgradeable_init();
 		__Ownable_init();
 		__ERC721_init("ArtPartitionTolerantStateDOA", "APTSD");
 		transferOwnership(newOwner);
 		swapRouter = _swapRouter;
-		USDC = _stableCoin;
+		USDC = _USDC;
 		WETH = _WETH;
+		poolFee = _poolFee;
 	}
 
-	/**
-	 * @dev function will create Oil contract
-	 */
 	event OilContractDeedPurchased(uint256 indexed contractId, uint256 indexed nftId, uint256 indexed deedAmount);
 	event OilContractCreated(uint256 indexed contractId, uint256 indexed contractValue);
 	event OilContractAvail(
@@ -72,17 +83,13 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 	);
 	event PaymentDispatched(uint256 indexed nftId, uint256 indexed paymentId, uint256 indexed paymentAmount, address owner);
 
-	function _createName(string calldata _name, uint256 _id) internal view returns (bytes32) {
-		return keccak256(abi.encodePacked(_name, _id, address(this)));
-	}
-
 	/**
 	 * @dev function will create oil contract
 	 * @param contractName: the name of contract
 	 * @param contractValue: the total value of contract
 	 **/
 
-	function createOilContract(string calldata contractName, uint256 contractValue) external onlyOwner {
+	function createOilContract(bytes32 contractName, uint256 contractValue) external onlyOwner {
 		require(contractValue > 100000, "Contract Value under 100000");
 		require(keccak256(abi.encodePacked(contractName)) != keccak256(abi.encodePacked("")), "Name required!");
 		uint256 contractId = contractIds++;
@@ -94,21 +101,20 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 		emit OilContractCreated(contractId, contractValue);
 	}
 
+	function _createName(bytes32 _name, uint256 _id) internal view returns (bytes32) {
+		return keccak256(abi.encodePacked(_name, _id, address(this)));
+	}
+
 	/**
 	 * @dev makeContractAvail will make well contract avail to public to buyStakeInOilContract
 	 */
 	function makeContractAvail(uint256 contractId) external onlyOwner {
 		OilContract memory oilContract = oilContracts[contractId];
-		require(oilContract.available == false, "Oil contract not available");
-		oilContract.available = _changeAvailability(oilContract);
+		require(oilContract.available == false, "Oil contract currently available");
+		oilContract.available = false;
 		require(oilContract.available, "OilContract not made available");
 		emit OilContractAvail(oilContract.id, oilContract.name, oilContract.totalValue, oilContract.available);
 		oilContracts[contractId] = oilContract;
-	}
-
-	function _changeAvailability(OilContract memory oilContract) internal pure returns (bool) {
-		oilContract.available = !oilContract.available;
-		return oilContract.available;
 	}
 
 	/**
@@ -117,8 +123,7 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 	function makeContractUnAvail(uint256 contractId) external onlyOwner {
 		OilContract memory oilContract = oilContracts[contractId];
 		require(oilContract.available, "Contract already unavailable");
-		oilContract.available = _changeAvailability(oilContract);
-		require(!oilContract.available, "OilContract still available");
+		oilContract.available = true;
 		emit OilContractUnAvail(oilContract.id, oilContract.name, oilContract.totalValue, oilContract.available);
 		oilContracts[contractId] = oilContract;
 	}
@@ -130,18 +135,18 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 	//considerations should be made for if we dont meet demand
 	function purchaseContractStake(uint256 contractId) external payable {
 		OilContract memory oilContract = oilContracts[contractId];
-		uint256 availPurchaseAmount = oilContract.totalValue - oilContract.totalValueLocked;
-		uint256 usdcEthQuote = _getQuoterVal(msg.value);
-		require(usdcEthQuote > availPurchaseAmount, "Too much ether sent");
 		require(!oilContract.funded, "Contract fully funded");
 		require(oilContract.available, "Contract not available");
+		uint256 availPurchaseAmount = oilContract.totalValue - oilContract.totalValueLocked;
+		uint256 buyerUSDC = _getQuoterVal(2);
+		require(buyerUSDC <= availPurchaseAmount, "Too much ether sent");
 
-		uint256 usdcAmount = _swapEthToStable();
+		buyerUSDC = _swapEthToStable();
 
-		contractIdToNftAmount[oilContract.name][oilContract.nftIds++] = usdcAmount;
+		contractIdToNftAmount[oilContract.name][oilContract.nftIds++] = buyerUSDC;
 
-		oilContract.totalValueLocked += usdcAmount;
-		emit OilContractDeedPurchased(oilContract.id, oilContract.nftIds, usdcAmount);
+		oilContract.totalValueLocked += buyerUSDC;
+		emit OilContractDeedPurchased(oilContract.id, oilContract.nftIds, buyerUSDC);
 		if (oilContract.totalValueLocked >= oilContract.totalValue) {
 			oilContract.funded = true;
 			oilContract.available = false;
@@ -173,24 +178,38 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 		usdcAmount = swapRouter.exactInputSingle(params);
 	}
 
-	function _getQuoterVal(uint256 _eth) internal view returns (uint256 usdsQuote) {
-		//must fill function with uniswap quoter
+	/**
+	 * @dev returns usd equivelent of wei sent function
+	 * @param _percision the amount of decimals to include in the returned chainlink price
+	 **/
+	function _getQuoterVal(uint256 _percision) internal view returns (uint256 usdcQuote) {
+		uint256 price = _getPrice(_percision);
+		usdcQuote = (msg.value * price) / 10**(18 + _percision); //all decimals removed before returning value
+	}
+
+	/**
+	 * @dev returns price of eth per usd at the {_percision} amount of decimals
+	 */
+	function _getPrice(uint256 _percision) internal view returns (uint256 precisionPrice) {
+		/**
+		 * Network: Kovan
+		 * Aggregator: ETH/USD
+		 * Address: 0x9326BFA02ADD2366b30bacB125260Af641031331
+		 */
+		AggregatorV3Interface priceFeed = AggregatorV3Interface(0x9326BFA02ADD2366b30bacB125260Af641031331);
+		require(_percision <= priceFeed.decimals(), "too many decimals in percision");
+		(, int256 price, , , ) = priceFeed.latestRoundData(); //return price (8 decimalPoints)
+		uint256 percisionDiff = priceFeed.decimals() - _percision;
+		precisionPrice = uint256(price) / 10**(percisionDiff);
 	}
 
 	function _getAmountOutMin() internal view returns (uint256) {
 		//minAmount is product of offcahin rate
 		//In production, use an oracle or other data source to choose a safer value for amountOutMinimum.
-		uint256 oracleUSDPerEth = _getOracleRate(USDC, WETH);
+		uint256 oracleUSDPerEth = _getPrice(0);
 		uint256 usdcAmount = oracleUSDPerEth * msg.value;
 		return usdcAmount;
 	}
-
-	function _getOracleRate(address USDS, address _WETH) internal pure returns (uint256) {}
-
-	/**
-	 * @dev _updateContract increment contractNFTID, updates TVL, and adds newTokenId to mapping
-	 * @return newTokenId : the token ID to be passed into dispatchNFT internal function
-	 */
 
 	/** @dev function dispatches token using _safeMint, an internal function extended from 721Upgradeable */
 	function _dispatchNFT(address to, uint256 nftId) internal {
@@ -226,8 +245,11 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 			address nftOwner = ownerOf(nftId);
 			uint256 paymentDue = _calculatePayment(nftId, oilContract.name, oilContract.totalValue);
 			(bool success, ) = payable(nftOwner).call{ value: paymentDue }("");
-			require(success, "PaymentError");
-			emit PaymentDispatched(nftId, paymentId, paymentDue, nftOwner);
+			if (success) {
+				emit PaymentDispatched(nftId, paymentId, paymentDue, nftOwner);
+			}
+			//place in escrow and place on escrow mapping
+			else escrowPayments[oilContract.id][nftOwner] = paymentDue;
 		}
 		return oilContract;
 	}

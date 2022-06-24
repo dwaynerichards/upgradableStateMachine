@@ -14,6 +14,7 @@ export default (async () => {
   const encodedFuncCall = PetroStake.interface.encodeFunctionData(functionToCall, args);
   // Gov.queue takes a bytes32descriptionsHash, we convert string to bytes before converting to hash
   const descHash = keccak256(toUtf8Bytes(proposalDesc));
+  const descHash2 = ethers.utils.id(proposalDesc);
 
   console.log("Queueing");
   const txQueue = await Governor.queue([PetroStake.address], value, [encodedFuncCall], descHash);

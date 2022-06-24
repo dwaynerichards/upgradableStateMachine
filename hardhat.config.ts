@@ -8,6 +8,7 @@ import "@nomiclabs/hardhat-ethers";
 import "hardhat-deploy";
 import "@openzeppelin/hardhat-upgrades";
 import * as dotenv from "dotenv";
+import { provider } from "./utils/web3Utils";
 dotenv.config();
 
 // This is a sample Hardhat task. To learn how to create your own go to
@@ -22,7 +23,11 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
+
+const blockNumber = (await (async () => provider.getBlockNumber())()) - 1;
 const defaultNetwork = "hardhat";
+
+//network forks latest maninnetBlock by default
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -41,6 +46,11 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       chainId: 31337,
+      forking: {
+        url: process.env.MAINNET_URL!,
+        //pinning fork blockNumber for fork
+        blockNumber,
+      },
     },
     localhost: {
       chainId: 31337,

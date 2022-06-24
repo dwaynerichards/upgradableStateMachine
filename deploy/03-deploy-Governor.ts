@@ -11,6 +11,11 @@ import {
 import { ContractFactory } from "ethers";
 import { ExtendedArtifact } from "hardhat-deploy/dist/types";
 
+/***
+ * @dev deployGovernor deploys upgradable governor contract,
+ * assigns role of proposer to Governor contract addres, allows any address to be executor
+ * revokes role of deployer as ADMIN
+ */
 const deployGovernor = async (hre: HardhatRuntimeEnvironment) => {
   const { getNamedAccounts, deployments } = hre;
   const { deployer } = await getNamedAccounts();
@@ -18,7 +23,6 @@ const deployGovernor = async (hre: HardhatRuntimeEnvironment) => {
 
   const [timeLock, govToken] = await Promise.all([get("TimeLock"), get("GovToken")]);
   const TimeLock = await ethers.getContractAt("TimeLock", timeLock.address);
-  //get factory => attach  with address to creat contract
 
   log("Deploying Governor proxy and Implementation contract");
 
