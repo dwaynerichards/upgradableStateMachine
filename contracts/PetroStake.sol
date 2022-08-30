@@ -4,10 +4,26 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/finance/PaymentSplitterUpgradeable.sol";
+import "@openzeppelin/contracts/payment/PaymentSplitter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
+/**
+add payment splitter to oilContract struct
+//when contract is fully funed => instatiate new payment splitter
+//create shares array using basis points
+//create owner array by iterating through nftId's
+
+//pay amount owed into paymentPlitter => triggers event
+
+//create function which allows owner of nft to accept funds
+transfer contract value to payment splitter
+ */
+
 contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC721Upgradeable {
+	using SafeERC20Upgradeable for IERC20;
+	using SafeERC20Upgradeable for IERC20Upgradeable;
 	uint256 public contractIds;
 	uint24 public poolFee;
 
@@ -16,7 +32,8 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 	address public WETH;
 
 	mapping(uint256 => OilContract) public oilContracts;
-	mapping(bytes32 => mapping(uint256 => uint256)) public contractIdToNftAmount;
+	///			contractId => NftId => AmountPaid
+	mapping(uint256 => mapping(uint256 => uint256)) public contractIdToNftAmount;
 	mapping(uint256 => mapping(address => uint256)) escrowPayments;
 	struct OilContract {
 		uint256 id;
@@ -27,6 +44,7 @@ contract PetroStake is Initializable, UUPSUpgradeable, OwnableUpgradeable, ERC72
 		bytes32 name;
 		bool available;
 		bool funded;
+		PaymentSplitterUpgradeable _pmtSplttr;
 		//payment dispatching should be indexedrather than saved onchain
 	}
 
@@ -63,18 +81,8 @@ string is usually one byte per character
 
 	event OilContractDeedPurchased(uint256 indexed contractId, uint256 indexed nftId, uint256 indexed deedAmount);
 	event OilContractCreated(uint256 indexed contractId, uint256 indexed contractValue);
-	event OilContractAvail(
-		uint256 indexed contractId,
-		bytes32 indexed contractName,
-		uint256 indexed contractValue,
-		bool available
-	);
-	event OilContractUnAvail(
-		uint256 indexed contractId,
-		bytes32 indexed contractName,
-		uint256 indexed contractValue,
-		bool available
-	);
+	event OilContractAvail(uint256 indexed contractId, uint256 indexed contractValue, bool available);
+	event OilContractUnAvail(uint256 indexed contractId, uint256 indexed contractValue, bool available);
 	event ContractFunded(
 		uint256 indexed contractId,
 		bytes32 indexed contractName,
@@ -85,24 +93,22 @@ string is usually one byte per character
 
 	/**
 	 * @dev function will create oil contract
-	 * @param contractName: the name of contract
 	 * @param contractValue: the total value of contract
 	 **/
 
-	function createOilContract(bytes32 contractName, uint256 contractValue) external onlyOwner {
+	function createOilContract(uint256 contractValue) external onlyOwner {
 		require(contractValue > 100000, "Contract Value under 100000");
-		require(keccak256(abi.encodePacked(contractName)) != keccak256(abi.encodePacked("")), "Name required!");
 		uint256 contractId = contractIds++;
 		OilContract memory oilContract;
 		oilContract.id = contractId;
 		oilContract.totalValue = contractValue;
-		oilContract.name = _createName(contractName, contractId);
+		oilContract.name = _createName(contractId);
 		oilContracts[contractId] = oilContract;
 		emit OilContractCreated(contractId, contractValue);
 	}
 
-	function _createName(bytes32 _name, uint256 _id) internal view returns (bytes32) {
-		return keccak256(abi.encodePacked(_name, _id, address(this)));
+	function _createName(uint256 _id) internal view returns (bytes32) {
+		return keccak256(abi.encodePacked(_id, address(this)));
 	}
 
 	/**
@@ -110,10 +116,9 @@ string is usually one byte per character
 	 */
 	function makeContractAvail(uint256 contractId) external onlyOwner {
 		OilContract memory oilContract = oilContracts[contractId];
-		require(oilContract.available == false, "Oil contract currently available");
-		oilContract.available = false;
-		require(oilContract.available, "OilContract not made available");
-		emit OilContractAvail(oilContract.id, oilContract.name, oilContract.totalValue, oilContract.available);
+		require(oilContract.available == false, "Oilcontract available");
+		oilContract.available = true;
+		emit OilContractAvail(oilContract.id, oilContract.totalValue, oilContract.available);
 		oilContracts[contractId] = oilContract;
 	}
 
@@ -124,7 +129,7 @@ string is usually one byte per character
 		OilContract memory oilContract = oilContracts[contractId];
 		require(oilContract.available, "Contract already unavailable");
 		oilContract.available = true;
-		emit OilContractUnAvail(oilContract.id, oilContract.name, oilContract.totalValue, oilContract.available);
+		emit OilContractUnAvail(oilContract.id, oilContract.totalValue, oilContract.available);
 		oilContracts[contractId] = oilContract;
 	}
 
@@ -133,17 +138,18 @@ string is usually one byte per character
 	 * @param contractId: id of contract
 	 */
 	//considerations should be made for if we dont meet demand
-	function purchaseContractStake(uint256 contractId) external payable {
+	function purchaseContractStakeEth(uint256 contractId) external payable {
 		OilContract memory oilContract = oilContracts[contractId];
 		require(!oilContract.funded, "Contract fully funded");
 		require(oilContract.available, "Contract not available");
 		uint256 availPurchaseAmount = oilContract.totalValue - oilContract.totalValueLocked;
-		uint256 buyerUSDC = _getQuoterVal(2);
-		require(buyerUSDC <= availPurchaseAmount, "Too much ether sent");
+		//calculate price on font end- too computationaly expensive
+		//uint256 buyerUSDC = _getQuoterVal(2);
+		//require(buyerUSDC <= availPurchaseAmount, "Too much ether sent");
 
-		buyerUSDC = _swapEthToStable();
+		uint256 buyerUSDC = _swapEthToStable();
 
-		contractIdToNftAmount[oilContract.name][oilContract.nftIds++] = buyerUSDC;
+		contractIdToNftAmount[oilContract.id][++oilContract.nftIds] = buyerUSDC;
 
 		oilContract.totalValueLocked += buyerUSDC;
 		emit OilContractDeedPurchased(oilContract.id, oilContract.nftIds, buyerUSDC);
@@ -155,6 +161,39 @@ string is usually one byte per character
 		_dispatchNFT(msg.sender, oilContract.nftIds);
 		oilContracts[contractId] = oilContract;
 	}
+
+	function createShares(uint256 _contractID) external onlyowner returns (address[], uint256[]) {
+		OilContract memory oilContract = _getOilContract(_contractID);
+		return _createShares(oilContract);
+	}
+
+	function _createShares(OilContract _oilContract) internal onlyowner returns (address[], uint256[]) {
+		require(_oilContract.funded, "notFunded");
+		require(!_oilContract.available, "contractStillAvail");
+		address[] memory owners;
+		uint256[] memory shares;
+		for (uint256 nftID = 0; nftID < oilContract.nftIds; nftID++) {
+			owners[nftID] = ownerOf(nftID);
+			uint256 ownerStake = contractIdToNftAmount[oilContract.id][nftID];
+			shares[nftID] = _getBasis(ownerStake, oilContract.totalValue);
+		}
+		return (owners, shares);
+	}
+
+	function addPmtSplttr(uint256 _contractID) external onlyOwner {
+		OilContract memory oilContract = _getOilContract(_contractID);
+		oilContracts[_contractID]._pmtSplttr = new PaymentSplitter(_createShares(oilContract));
+	}
+
+	function addPmtSplttrUpgradeable(uint256 _contractID, PaymentSplitterUpgradeable _pmtSplttr) external onlyOwner {
+		OilContract memory oilContract = _getOilContract(_contractID);
+		require(oilContract.funded, "notFunded");
+		require(!oilContract.available, "contractStillAvail");
+		oilContracts[_contractID]._pmtSplttr = _pmtSplttr;
+	}
+
+	///TODO- check if the above PMTSPLTTER is upgradable as it's created by solidity as apposed to OZ
+	///see: https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable
 
 	/***
     @notice swapEthRoStable swaps a fixed amount of WETH (amountIn) for a maximum possible amount 
@@ -222,52 +261,66 @@ string is usually one byte per character
 	/**
 	 * @dev functions dispatches and records payments to each ownerOf NFT associated with contract
 	 */
-	function dispatchPayments(uint256 contractId) external payable onlyOwner {
+	function dispatchTokenPayment(
+		uint256 contractId,
+		IERC20Upgradeable _token,
+		uint256 amount
+	) external payable onlyOwner {
 		OilContract memory oilContract = oilContracts[contractId];
 		require(oilContract.funded, "contract must me funded");
-		oilContracts[contractId] = _dispatchPayments(oilContract);
+		_dispatchPayment(oilContract, _token, amount);
 	}
 
 	/**
-	* @dev function iterates through nftId's, dispatches payment to ownerOf nft, records Payment receipt
-    consider putting in reentrancy guard as contract will continue to execute as itteration continues through nftId's
-    * @param oilContract: oilContract with which to dispatch payments
-     */
-	//instead of dispatching payment to wallet
-	//pay into oilContract
+	 * @dev function iterates through nftId's, dispatches payment to ownerOf nft, records Payment receipt
+	 * @param oilContract: oilContract with which to dispatch payments
+	 */
 	//let owner of nft pull payments from contract
 	//or instantiate new literal contract/ with address for each oil contract
 	//dispatch payents to each oil contract
 	//let nft owners pull payment from each oil contract address
-	function _dispatchPayments(OilContract memory oilContract) internal returns (OilContract memory) {
-		for (uint256 nftId = 1; nftId <= oilContract.nftIds; nftId++) {
-			uint256 paymentId = oilContract.paymentId++; //function increments paymentIDs
-			address nftOwner = ownerOf(nftId);
-			uint256 paymentDue = _calculatePayment(nftId, oilContract.name, oilContract.totalValue);
-			(bool success, ) = payable(nftOwner).call{ value: paymentDue }("");
-			if (success) {
-				emit PaymentDispatched(nftId, paymentId, paymentDue, nftOwner);
-			}
-			//place in escrow and place on escrow mapping
-			else escrowPayments[oilContract.id][nftOwner] = paymentDue;
-		}
+
+	//release payments to owner of nft
+	//after sucessfulfuinding
+	//invoke function to create payment splitter
+	//have payments
+	function _dispatchTokenPayment(
+		OilContract memory oilContract,
+		IERC20Upgradeable _token,
+		uint256 _amount
+	) internal returns (OilContract memory) {
+		//pay pmtsplitter tokens
+		SafeERC20Upgradeable.safeApprove(_token, this, _amount);
+		SafeERC20Upgradeable.safeTransferFrom(_token, msg.sender, oilContract._pmtSplttr, _amount);
+		//place in escrow and place on escrow mapping
 		return oilContract;
 	}
 
 	/**
+	 * @dev Triggers a transfer to `msg.sender` of the amount of `token` tokens they are owed, according to their
+	 * percentage of the total shares and their previous withdrawals. `token` must be the address of an IERC20
+	 * contract. for Now USDC
+	 */
+	function acceptTokenPayment(uint256 _contractId) external {
+		OilContract memory oilContract = _getOilContract(_contractId);
+		oilContract._pmtSplttr.release(USDC, msg.sender);
+	}
+
+	/**
+	previous internal function not handled by Paymentsplitter
 	 * @dev function calculates payment die to an ownerOf nft associated with contract
 	 * @param nftId: uint identifier associated with nft
-	 * @param contractName: encoded name of contract
+	 * @param contractId: encoded name of contract
 	 * @param contractVal: total value of contract
 	 */
 	function _calculatePayment(
 		uint256 nftId,
-		bytes32 contractName,
+		uint256 contractId,
 		uint256 contractVal
 	) internal view returns (uint256 amountDue) {
 		//access nft  access deed, caliculate percentage of totalContractValue
-		//mapping(bytes32 => mapping(uint256 => uint256)) contractIdToNFT_Amount;
-		uint256 ownerStake = contractIdToNftAmount[contractName][nftId];
+		//mapping(uint => mapping(uint256 => uint256)) contractIdToNFT_Amount;
+		uint256 ownerStake = contractIdToNftAmount[contractId][nftId];
 		amountDue = _getAmountDue(ownerStake, contractVal);
 		return amountDue;
 	}
@@ -278,8 +331,8 @@ string is usually one byte per character
 	 * @param contractValue: the total value of the oil contract
 	 */
 	function _getAmountDue(uint256 ownerStake, uint256 contractValue) private pure returns (uint256 amountDue) {
-		uint256 percentageOwed = _getBasis(ownerStake, contractValue);
-		amountDue = (percentageOwed * contractValue) / 10000;
+		uint256 basisPoints = _getBasis(ownerStake, contractValue);
+		amountDue = (percentageOwed * msg.value) / 10000;
 	}
 
 	function _getBasis(uint256 _numerator, uint256 denominator) private pure returns (uint256 _basis) {
@@ -295,7 +348,7 @@ string is usually one byte per character
 		_oilContract = _getOilContract(_contractId);
 	}
 
-	function _getOilContract(uint256 _contractId) internal view returns (OilContract storage oilContract) {
+	function _getOilContract(uint256 _contractId) internal view returns (OilContract memory oilContract) {
 		oilContract = oilContracts[_contractId];
 	}
 

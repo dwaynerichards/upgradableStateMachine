@@ -1,0 +1,9 @@
+{
+  "solidity.compileUsingRemoteVersion": "0.8.9",
+  "solidity.defaultCompiler": "remote",
+  "solidity.remappings": [
+    "@openzeppelin/=node_modules/@openzeppelin",
+    "@uniswap/=node_modules/@uniswap",
+    "@chainlink/=node_modules/@chainlink"
+  ]
+}
