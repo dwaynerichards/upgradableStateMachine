@@ -185,6 +185,8 @@ string is usually one byte per character
 		oilContracts[_contractID]._pmtSplttr = new PaymentSplitter(_createShares(oilContract));
 	}
 
+	/*****
+	 */
 	function addPmtSplttrUpgradeable(uint256 _contractID, PaymentSplitterUpgradeable _pmtSplttr) external onlyOwner {
 		OilContract memory oilContract = _getOilContract(_contractID);
 		require(oilContract.funded, "notFunded");
@@ -263,47 +265,37 @@ string is usually one byte per character
 	 */
 	function dispatchTokenPayment(
 		uint256 contractId,
-		IERC20Upgradeable _token,
-		uint256 amount
+		IERC20Upgradeable token,
+		uint256 value
 	) external payable onlyOwner {
 		OilContract memory oilContract = oilContracts[contractId];
 		require(oilContract.funded, "contract must me funded");
-		_dispatchPayment(oilContract, _token, amount);
+		_dispatchPayment(oilContract, token, value);
 	}
 
-	/**
-	 * @dev function iterates through nftId's, dispatches payment to ownerOf nft, records Payment receipt
-	 * @param oilContract: oilContract with which to dispatch payments
-	 */
-	//let owner of nft pull payments from contract
-	//or instantiate new literal contract/ with address for each oil contract
-	//dispatch payents to each oil contract
-	//let nft owners pull payment from each oil contract address
+	/// @dev Implementation of ERC20 transfer function that reverts on failure
 
-	//release payments to owner of nft
-	//after sucessfulfuinding
-	//invoke function to create payment splitter
-	//have payments
 	function _dispatchTokenPayment(
-		OilContract memory oilContract,
-		IERC20Upgradeable _token,
-		uint256 _amount
-	) internal returns (OilContract memory) {
-		//pay pmtsplitter tokens
-		SafeERC20Upgradeable.safeApprove(_token, this, _amount);
-		SafeERC20Upgradeable.safeTransferFrom(_token, msg.sender, oilContract._pmtSplttr, _amount);
-		//place in escrow and place on escrow mapping
-		return oilContract;
+		OilContract memory _oilContract,
+		IERC20 _token,
+		uint256 _value
+	) internal {
+		SafeERC20Upgradeable.safeTransfer(_token, _oilContract._pmtSplttr, _value);
 	}
 
 	/**
-	 * @dev Triggers a transfer to `msg.sender` of the amount of `token` tokens they are owed, according to their
+	 * @dev Triggers a transfer to `account` of the amount of `token` tokens they are owed, according to their
 	 * percentage of the total shares and their previous withdrawals. `token` must be the address of an IERC20
 	 * contract. for Now USDC
 	 */
-	function acceptTokenPayment(uint256 _contractId) external {
-		OilContract memory oilContract = _getOilContract(_contractId);
-		oilContract._pmtSplttr.release(USDC, msg.sender);
+	function acceptTokenPayment(
+		uint256 contractId,
+		IERC20Upgradeable token,
+		address payable account
+	) external {
+		OilContract memory oilContract = _getOilContract(contractId);
+		oilContract._pmtSplttr.release(token, account);
+		//Efficiant = _getOilContract(_contractId)._pmtSplttr.release(USDC, msg.sender);
 	}
 
 	/**
